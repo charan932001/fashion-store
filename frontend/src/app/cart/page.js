@@ -105,6 +105,11 @@ export default function CartPage() {
                 src={item.image_url}
                 alt={item.name}
                 className="h-32 w-24 object-cover"
+                onError={(event) => {
+                  event.currentTarget.onerror = null;
+                  event.currentTarget.src =
+                    "https://placehold.co/600x800?text=No+Image";
+                }}
               />
 
               <div className="flex-1">

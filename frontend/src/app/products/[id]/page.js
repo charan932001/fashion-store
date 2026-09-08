@@ -71,6 +71,11 @@ export default function ProductDetail() {
               src={product.image_url}
               alt={product.name}
               className="h-full w-full object-cover"
+              onError={(event) => {
+                event.currentTarget.onerror = null;
+                event.currentTarget.src =
+                  "https://placehold.co/600x800?text=No+Image";
+              }}
             />
           </div>
 

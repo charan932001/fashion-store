@@ -1,6 +1,7 @@
 const express = require("express");
 const dotenv = require("dotenv");
 const { Pool } = require("pg");
+const cors = require("cors");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const authMiddleware = require("./middleware/authMiddleware");
@@ -8,7 +9,7 @@ const authMiddleware = require("./middleware/authMiddleware");
 dotenv.config();
 
 const app = express();
-
+app.use(cors());
 app.use(express.json());
 
 const pool = new Pool({
@@ -43,13 +44,52 @@ app.get("/db-test", async (req, res) => {
 // Get all products
 app.get("/api/products", async (req, res) => {
   try {
+    let page = parseInt(req.query.page, 10);
+    let limit = parseInt(req.query.limit, 10);
+
+    if (!Number.isInteger(page) || page < 1) {
+      page = 1;
+    }
+
+    if (!Number.isInteger(limit) || limit < 1) {
+      limit = 8;
+    }
+
+    const search =
+      typeof req.query.search === "string" ? req.query.search.trim() : "";
+
+    const offset = (page - 1) * limit;
+
+    const whereClause = search ? "WHERE name ILIKE $1 OR category ILIKE $1" : "";
+    const searchParam = search ? [`%${search}%`] : [];
+
+    const countResult = await pool.query(
+      `SELECT COUNT(*) FROM products ${whereClause}`,
+      searchParam
+    );
+
+    const totalProducts = parseInt(countResult.rows[0].count, 10);
+    const totalPages = Math.max(
+      Math.ceil(totalProducts / limit),
+      1
+    );
+
     const result = await pool.query(
-      "SELECT * FROM products ORDER BY id DESC"
+      `SELECT * FROM products ${whereClause}
+       ORDER BY id DESC
+       LIMIT $${searchParam.length + 1} OFFSET $${searchParam.length + 2}`,
+      [...searchParam, limit, offset]
     );
 
     res.json({
       success: true,
       products: result.rows,
+      pagination: {
+        page,
+        limit,
+        totalProducts,
+        totalPages,
+      },
     });
   } catch (error) {
     console.error(error);
@@ -57,6 +97,36 @@ app.get("/api/products", async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to fetch products",
+    });
+  }
+});
+
+app.get("/api/products/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query(
+      "SELECT * FROM products WHERE id = $1",
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Product not found",
+      });
+    }
+
+    res.json({
+      success: true,
+      product: result.rows[0],
+    });
+  } catch (error) {
+    console.error(error);
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch product",
     });
   }
 });
@@ -212,12 +282,19 @@ const PORT = process.env.PORT || 5001;
 // Add product to cart
 app.post("/api/cart", authMiddleware, async (req, res) => {
   try {
+    if (!req.body || Object.keys(req.body).length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "feature coming soon",
+      });
+    }
+
     const { productId, quantity = 1 } = req.body;
 
     if (!productId) {
       return res.status(400).json({
         success: false,
-        message: "Product ID is required",
+        message: "productId is required",
       });
     }
 
