@@ -18,7 +18,6 @@ export function AuthProvider({ children }) {
     const storedToken = localStorage.getItem("token");
 
     if (!storedToken) {
-      setLoading(false);
       return;
     }
 
